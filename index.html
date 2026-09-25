@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>陪玩接单系统</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,"Microsoft YaHei",sans-serif;background:#f6f4f8;color:#333}
+.container{width:94%;max-width:1100px;margin:25px auto}
+.header,.section,.stat-card{background:#fff;box-shadow:0 3px 15px rgba(0,0,0,.06)}
+.header{padding:25px;border-radius:20px;margin-bottom:20px}
+.header h1{font-size:28px;margin-bottom:7px}.header p{color:#888;font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px}
+.stat-card{padding:20px;border-radius:17px}.stat-card p{color:#888;font-size:14px;margin-bottom:8px}.stat-card h2{font-size:24px}
+.section{padding:25px;border-radius:20px;margin-bottom:20px}.section h2{font-size:20px;margin-bottom:20px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.form-group{margin-bottom:15px}.full{grid-column:1/-1}
+label{display:block;font-size:14px;color:#555;margin-bottom:7px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:14px;outline:none;background:#fff}
+textarea{min-height:90px;resize:vertical}
+.btn{border:0;border-radius:10px;padding:12px 18px;cursor:pointer;font-size:14px}
+.main{width:100%;background:#333;color:#fff}.edit{background:#f1f1f1;margin-right:6px}.delete{background:#ffe9e9;color:#d33}.cancel{background:#eee;margin-top:10px;width:100%;display:none}
+.search{display:grid;grid-template-columns:1fr 180px;gap:10px;margin-bottom:20px}
+.order{border:1px solid #eee;border-radius:15px;padding:17px;margin-bottom:12px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.name{font-weight:bold;font-size:17px}.money{font-weight:bold;font-size:17px}
+.info{color:#777;font-size:14px;line-height:1.8}.buttons{margin-top:12px}
+.status,.type{display:inline-block;padding:4px 9px;border-radius:8px;font-size:12px;margin-top:7px}.type{background:#f0eef5;margin-left:5px}
+.paid{background:#e7f7eb;color:#2e8b57}.unpaid{background:#fff1e5;color:#d2691e}
+.empty{text-align:center;color:#999;padding:30px 10px}
+@media(max-width:700px){.stats{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}.full{grid-column:auto}.search{grid-template-columns:1fr}.header h1{font-size:23px}}
+@media(max-width:420px){.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header"><h1>🎮 陪玩接单系统</h1><p>记录每一张单子，管理你的工资</p></div>
+
+<div class="stats">
+<div class="stat-card"><p>📋 今日单数</p><h2 id="todayOrders">0</h2></div>
+<div class="stat-card"><p>💰 今日工资</p><h2>RM <span id="todayMoney">0.00</span></h2></div>
+<div class="stat-card"><p>📅 本月单数</p><h2 id="monthOrders">0</h2></div>
+<div class="stat-card"><p>💵 本月工资</p><h2>RM <span id="monthMoney">0.00</span></h2></div>
+</div>
+
+<div class="section">
+<h2 id="formTitle">➕ 新增单子</h2>
+<div class="form-grid">
+<div class="form-group"><label>📅 日期</label><input type="date" id="orderDate"></div>
+<div class="form-group"><label>👤 客户</label><input type="text" id="customer" placeholder="输入客户名字"></div>
+<div class="form-group"><label>🎮 单子类型</label><select id="orderType"><option>陪玩</option><option>代打</option><option>其他</option></select></div>
+<div class="form-group"><label>💰 工资（RM）</label><input type="number" id="salary" placeholder="例如 30" min="0" step="0.01"></div>
+<div class="form-group full"><label>📝 单子详情</label><textarea id="orderDetail" placeholder="例如：ML 2小时 / 王者3局 / 陪玩语音..."></textarea></div>
+<div class="form-group"><label>💳 状态</label><select id="status"><option>已结</option><option>未结</option></select></div>
+</div>
+<button class="btn main" id="saveButton" onclick="saveOrder()">添加单子</button>
+<button class="btn cancel" id="cancelButton" onclick="cancelEdit()">取消编辑</button>
+</div>
+
+<div class="section">
+<h2>📋 单子记录</h2>
+<div class="search"><input id="search" placeholder="🔍 搜索客户或单子详情..." oninput="renderOrders()"><select id="filterType" onchange="renderOrders()"><option>全部</option><option>陪玩</option><option>代打</option><option>其他</option></select></div>
+<div id="orderList"></div>
+</div>
+</div>
+
+<script>
+let orders=JSON.parse(localStorage.getItem("peiwanOrders"))||[];
+let editingId=null;
+
+function today(){
+let d=new Date();
+return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+document.getElementById("orderDate").value=today();
+
+function saveData(){localStorage.setItem("peiwanOrders",JSON.stringify(orders));}
+
+function saveOrder(){
+let date=orderDate.value,customer=document.getElementById("customer").value.trim(),type=orderType.value,detail=orderDetail.value.trim(),salary=parseFloat(document.getElementById("salary").value),status=document.getElementById("status").value;
+if(!date)return alert("请选择日期！");
+if(!customer)return alert("请输入客户名字！");
+if(!detail)return alert("请输入单子详情！");
+if(isNaN(salary)||salary<0)return alert("请输入正确的工资！");
+
+if(editingId!==null){
+let i=orders.findIndex(o=>o.id===editingId);
+if(i>-1)orders[i]={id:editingId,date,customer,type,detail,salary,status};
+editingId=null;
+}else{
+orders.unshift({id:Date.now(),date,customer,type,detail,salary,status});
+}
+saveData();clearForm();renderOrders();updateStats();
+}
+
+function clearForm(){
+customer.value="";orderType.value="陪玩";orderDetail.value="";salary.value="";status.value="已结";orderDate.value=today();
+formTitle.innerText="➕ 新增单子";saveButton.innerText="添加单子";cancelButton.style.display="none";
+}
+function editOrder(id){
+let o=orders.find(x=>x.id===id);if(!o)return;
+editingId=id;orderDate.value=o.date;customer.value=o.customer;orderType.value=o.type;orderDetail.value=o.detail;salary.value=o.salary;status.value=o.status;
+formTitle.innerText="✏️ 编辑单子";saveButton.innerText="保存修改";cancelButton.style.display="block";window.scrollTo({top:0,behavior:"smooth"});
+}
+function cancelEdit(){editingId=null;clearForm();}
+function deleteOrder(id){
+if(!confirm("确定要删除这张单子吗？"))return;
+orders=orders.filter(o=>o.id!==id);saveData();renderOrders();updateStats();
+}
+function renderOrders(){
+let list=document.getElementById("orderList"),q=search.value.toLowerCase().trim(),f=filterType.value;
+let arr=orders.filter(o=>(o.customer.toLowerCase().includes(q)||o.detail.toLowerCase().includes(q))&&(f==="全部"||o.type===f));
+if(!arr.length){list.innerHTML='<div class="empty">📭 暂时没有符合条件的单子</div>';return;}
+list.innerHTML=arr.map(o=>`<div class="order"><div class="top"><div class="name">${esc(o.customer)} <span class="type">${esc(o.type)}</span></div><div class="money">RM ${Number(o.salary).toFixed(2)}</div></div><div class="info">📅 ${o.date}<br>📝 ${esc(o.detail)}<br><span class="status ${o.status==="已结"?"paid":"unpaid"}">${o.status==="已结"?"✓ 已结":"⏳ 未结"}</span></div><div class="buttons"><button class="btn edit" onclick="editOrder(${o.id})">✏️ 编辑</button><button class="btn delete" onclick="deleteOrder(${o.id})">🗑️ 删除</button></div></div>`).join("");
+}
+function updateStats(){
+let t=today(),d=new Date(),y=d.getFullYear(),m=d.getMonth(),tod=orders.filter(o=>o.date===t),mon=orders.filter(o=>{let x=new Date(o.date);return x.getFullYear()===y&&x.getMonth()===m});
+todayOrders.innerText=tod.length;todayMoney.innerText=tod.reduce((s,o)=>s+Number(o.salary),0).toFixed(2);monthOrders.innerText=mon.length;monthMoney.innerText=mon.reduce((s,o)=>s+Number(o.salary),0).toFixed(2);
+}
+function esc(x){let d=document.createElement("div");d.textContent=x;return d.innerHTML;}
+renderOrders();updateStats();
+</script>
+</body>
+</html>
